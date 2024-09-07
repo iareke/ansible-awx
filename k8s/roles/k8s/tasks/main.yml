@@ -3,4 +3,77 @@
   become: true
   copy:
     src: 'files/k8s.conf-modules'
-    dest: '/tmp/k8s.conf'
+    dest: '/etc/modules-load.d/k8s.conf'
+- name: Load overlay module
+  become: true
+  ansible.builtin.command: modprobe overlay
+  ignore_errors: true
+- name: Load br_netfilter module
+  become: true
+  ansible.builtin.command: modprobe br_netfilter
+  ignore_errors: true
+- name: 'sysctl parameters'
+  become: true
+  copy:
+    src: 'files/k8s.conf-sysctl'
+    dest: '/etc/sysctl.d/k8s.conf'
+- name: Run sysctl --system
+  become: true
+  ansible.builtin.command: sysctl --system
+- name: 'OS deps'
+  become: true
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+    name: "{{ item }}"
+    state: latest
+  loop:
+    - containerd
+- name: 'Generate config.toml'
+  become: true
+  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+- name: Check if /etc/containerd/config.toml exists
+  ansible.builtin.stat:
+    path: /etc/containerd/config.toml
+  register: config_file_stat
+- name: 'Enable SystemdCgroup'
+  become: true
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+  changed_when: config_file_stat.stat.exists and config_file_stat.changed
+  when: config_file_stat.stat.exists
+- name: restart containerd
+  become: true
+  service:
+    name: containerd
+    state: restarted
+- name: Check if Kubernetes GPG keyring file exists
+  stat:
+    path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  register: k8s_keyring_file_status
+- name: Download Kubernetes GPG Key
+  become: true
+  ansible.builtin.get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key"
+    dest: "/tmp/kubernetes-apt-key.gpg"
+  when: not k8s_keyring_file_status.stat.exists
+- name: Import Kubernetes GPG Key
+  become: true
+  ansible.builtin.shell: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg < /tmp/kubernetes-apt-key.gpg
+  when: not k8s_keyring_file_status.stat.exists
+- name: Create Kubernetes APT repository file
+  become: true
+  ansible.builtin.shell: echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+  when: not k8s_keyring_file_status.stat.exists
+- name: 'Install k8s'
+  become: true
+  apt:
+    update_cache: yes
+    name: "{{ item }}"
+    state: present
+  loop:
+    - kubectl=1.28.6-1.1
+    - kubelet=1.28.6-1.1
+    - kubeadm=1.28.6-1.1

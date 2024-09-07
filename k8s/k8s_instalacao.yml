@@ -2,3 +2,4 @@
 - hosts: kubernetes
   roles:
     - k8s
+    - helm

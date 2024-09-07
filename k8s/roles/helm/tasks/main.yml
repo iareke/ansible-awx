@@ -1,0 +1,26 @@
+- name: Check if Helm GPG keyring file exists
+  stat:
+    path: /etc/apt/keyrings/helm-apt-keyring.gpg
+  register: helm_keyring_file_status
+- name: Download Helm GPG Key
+  become: true
+  ansible.builtin.get_url:
+    url: "https://baltocdn.com/helm/signing.asc"
+    dest: "/tmp/helm-apt-key.asc"
+  when: not helm_keyring_file_status.stat.exists
+- name: Import Helm GPG Key
+  become: true
+  ansible.builtin.shell: gpg --dearmor -o /etc/apt/keyrings/helm-apt-keyring.gpg < /tmp/helm-apt-key.asc
+  when: not helm_keyring_file_status.stat.exists
+- name: Create Helm APT repository file
+  become: true
+  ansible.builtin.shell: echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/helm-apt-keyring.gpg] https://baltocdn.com/helm/stable/debian/ all main' | tee /etc/apt/sources.list.d/helm.list
+  when: not helm_keyring_file_status.stat.exists
+- name: 'Install helm'
+  become: true
+  apt:
+    update_cache: yes
+    name: "{{ item }}"
+    state: latest
+  loop:
+    - helm
