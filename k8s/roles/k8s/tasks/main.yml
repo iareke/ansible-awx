@@ -1,0 +1,6 @@
+---
+- name: 'Config modules'
+  become: true
+  copy:
+    src: 'files/k8s.conf-modules'
+    dest: '/tmp/k8s.conf'
