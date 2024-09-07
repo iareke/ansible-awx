@@ -1,0 +1,27 @@
+---
+- name: Copia e executa script
+  hosts: all
+  become: yes
+  vars:
+    script_path: "../scripts"
+    script_name: "{{ playbook_extra_vars.script_name }}"
+  tasks:
+    - name: Check if script_name is defined
+      fail:
+        msg: "Informar a variavel 'script_name' com o nome do script a ser executado."
+      when: script_name is not defined or script_name == ""
+    - name: Check if file exists
+      fail:
+        msg: "Script não encontrado em '{{ script_path }}/{{ script_name }}'"
+      when: script_path is not defined or script_name is not defined or (script_path + '/' + script_name) is not exists
+    - name: Copy script to /tmp
+      copy:
+        src: "{{ script_path }}/{{ script_name }}"
+        dest: "/tmp/{{ script_name }}"
+        mode: 0755
+    - name: Execute script
+      command: "/tmp/{{ script_name }}"
+    - name: Remove script
+      file:
+        path: "/tmp/{{ script_name }}"
+        state: absent
