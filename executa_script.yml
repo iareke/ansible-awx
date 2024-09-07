@@ -3,7 +3,7 @@
   hosts: all
   become: yes
   vars:
-    script_path: "../scripts"
+    script_path: "scripts"
     script_name: "{{ playbook_extra_vars.script_name }}"
   tasks:
     - name: Check if script_name is defined
